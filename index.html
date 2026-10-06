@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>6人 LINE 即時抽順位</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                    },
+                    colors: {
+                        line: '#06C755',
+                        'line-hover': '#05B34C',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .bg-grid-pattern {
+            background-image: radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 0);
+            background-size: 20px 20px;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(6, 199, 85, 0.4); transform: scale(1); }
+            50% { box-shadow: 0 0 25px rgba(6, 199, 85, 0.8); transform: scale(1.02); }
+        }
+        .pulse-button {
+            animation: pulse-glow 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col justify-between bg-grid-pattern antialiased select-none">
+
+    <!-- Custom Toast Notification -->
+    <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-11/12 max-w-md pointer-events-none transition-all duration-300 opacity-0 translate-y-[-20px]">
+        <div id="toast-body" class="bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center justify-between text-sm font-medium">
+            <span id="toast-message">訊息通知</span>
+            <i id="toast-icon" class="fa-solid fa-circle-info text-line text-lg ml-2"></i>
+        </div>
+    </div>
+
+    <!-- MAIN CONTAINER -->
+    <div class="max-w-md mx-auto w-full px-4 py-6 flex-grow flex flex-col">
+        
+        <!-- Header Section -->
+        <header class="text-center mb-6">
+            <div class="inline-flex items-center justify-center space-x-2 bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-bold mb-2">
+                <i class="fa-solid fa-bolt text-emerald-600"></i>
+                <span>LINE 群組即時同步抽籤</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                🎲 6人即時抽順位
+            </h1>
+            <p class="text-xs text-slate-500 mt-1">誰先按誰先抽 • 即時公平鎖定 • 順位不重複</p>
+        </header>
+
+        <!-- VIEW 1: LOBBY / INITIAL HOME VIEW -->
+        <div id="view-lobby" class="space-y-4">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 text-center space-y-4">
+                <div class="w-16 h-16 bg-emerald-50 text-line rounded-2xl flex items-center justify-center mx-auto text-3xl shadow-inner">
+                    <i class="fa-solid fa-shuffle"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">建立新抽籤房間</h2>
+                    <p class="text-xs text-slate-500 mt-1">建立後將連結傳至 LINE 群組，讓大家點擊加入即時搶抽順位！</p>
+                </div>
+                <button id="btn-create-room" class="w-full bg-line hover:bg-line-hover text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-base active:scale-95">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    <span>建立新房間</span>
+                </button>
+            </div>
+
+            <div class="relative flex py-2 items-center">
+                <div class="flex-grow border-t border-slate-300"></div>
+                <span class="flex-shrink mx-4 text-xs font-semibold text-slate-400">或輸入代碼</span>
+                <div class="flex-grow border-t border-slate-300"></div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-3">
+                <label for="input-room-id" class="block text-xs font-bold text-slate-600 uppercase tracking-wider">房間代碼</label>
+                <div class="flex space-x-2">
+                    <input type="text" id="input-room-id" placeholder="請輸入 8 位代碼" class="flex-1 bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 block p-3 font-mono tracking-wider text-center uppercase font-bold" maxlength="8">
+                    <button id="btn-join-by-code" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-5 py-3 rounded-xl transition duration-200 text-sm flex items-center justify-center active:scale-95">
+                        加入
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: NAME INPUT FORM (JOIN ROOM) -->
+        <div id="view-name-input" class="hidden space-y-4">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+                <div class="text-center space-y-1">
+                    <div class="inline-block bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-mono font-bold mb-1">
+                        房間：<span id="display-joining-room-id" class="text-emerald-600">--------</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-900">請輸入你的暱稱</h2>
+                    <p class="text-xs text-slate-500">這個名字將會公開顯示在群組抽籤結果中</p>
+                </div>
+
+                <div class="space-y-2">
+                    <input type="text" id="input-user-name" placeholder="例如：小明、阿國、老王" class="w-full bg-slate-50 border border-slate-300 text-slate-900 text-base rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 block p-3.5 text-center font-bold" maxlength="12">
+                    <p class="text-right text-[10px] text-slate-400">最多 12 個字</p>
+                </div>
+
+                <button id="btn-confirm-join" class="w-full bg-line hover:bg-line-hover text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition duration-200 text-base active:scale-95 flex items-center justify-center space-x-2">
+                    <span>加入房間準備抽籤</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- VIEW 3: MAIN ROOM DASHBOARD -->
+        <div id="view-room-dashboard" class="hidden space-y-4 flex-grow flex flex-col">
+            
+            <!-- Room Info Bar -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
+                <div>
+                    <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">現有房間</div>
+                    <div class="flex items-center space-x-2">
+                        <span id="room-code-display" class="font-mono font-black text-lg text-slate-800">------</span>
+                        <span id="room-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">準備中</span>
+                    </div>
+                </div>
+                <button id="btn-copy-link" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 active:scale-95">
+                    <i class="fa-regular fa-copy text-sm"></i>
+                    <span>複製連結</span>
+                </button>
+            </div>
+
+            <!-- DRAW ACTION BUTTON CONTAINER -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 text-center space-y-3">
+                <div id="draw-btn-status-text" class="text-xs font-bold text-slate-500">
+                    等待中... 請準備搶抽順位
+                </div>
+
+                <!-- Main Draw Button -->
+                <button id="btn-draw-rank" class="w-full bg-line hover:bg-line-hover disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed disabled:shadow-none text-white font-extrabold text-xl py-5 px-6 rounded-2xl shadow-xl transition duration-200 flex items-center justify-center space-x-3 active:scale-95">
+                    <i id="btn-draw-icon" class="fa-solid fa-dice text-2xl"></i>
+                    <span id="btn-draw-label">🎲 抽我的順位</span>
+                </button>
+            </div>
+
+            <!-- COMPLETED WINNERS PODIUM BANNER (Hidden until complete) -->
+            <div id="completed-summary-card" class="hidden bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg space-y-3">
+                <div class="text-center space-y-1">
+                    <div class="text-2xl font-black flex items-center justify-center space-x-2">
+                        <span>🎉</span>
+                        <span>抽籤完成！</span>
+                        <span>🎉</span>
+                    </div>
+                    <p class="text-xs text-amber-100">全部 6 個順位已即時抽籤完畢</p>
+                </div>
+            </div>
+
+            <!-- RESULTS LIST BY RANK (1 to 6) -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1">
+                        <i class="fa-solid fa-list-ol text-emerald-600"></i>
+                        <span>━━━━ 抽籤結果 ━━━━</span>
+                    </h3>
+                    <span id="progress-counter" class="text-xs font-bold text-slate-400">0 / 6 人完成</span>
+                </div>
+
+                <!-- 6 Ranks Grid -->
+                <div id="ranks-table-container" class="grid grid-cols-1 gap-2">
+                    <!-- Dynamic standard rows for ranks 1-6 -->
+                </div>
+            </div>
+
+            <!-- REMAINING RANKS POOL -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-2">
+                <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1">
+                    <i class="fa-solid fa-boxes-stacked text-emerald-600"></i>
+                    <span>━━━━ 剩餘順位 ━━━━</span>
+                </h3>
+                <div id="remaining-ranks-container" class="flex flex-wrap gap-2 py-1 min-h-[36px] items-center">
+                    <!-- Badges for numbers left e.g. ① ③ ⑤ -->
+                </div>
+            </div>
+
+            <!-- PARTICIPANTS LIST -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1">
+                        <i class="fa-solid fa-users text-emerald-600"></i>
+                        <span>━━━━ 參與者 ━━━━</span>
+                    </h3>
+                    <span id="participants-count-tag" class="text-xs font-bold text-slate-400">0 / 6 人加入</span>
+                </div>
+
+                <div id="participants-list-container" class="space-y-2">
+                    <!-- List of current participants -->
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="text-center py-4 text-[11px] text-slate-400 border-t border-slate-200/60 bg-white/50 backdrop-blur-sm mt-auto">
+        6人即時搶抽順位網頁版 • 純前端輕量即時房
+    </footer>
+
+    <!-- DRAW ANIMATION MODAL -->
+    <div id="draw-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 text-center max-w-xs w-full shadow-2xl space-y-4 animate-bounce-short">
+            <div class="relative w-24 h-24 mx-auto flex items-center justify-center bg-emerald-50 rounded-full border-4 border-emerald-400 text-emerald-600 text-4xl shadow-inner">
+                <i id="draw-modal-icon" class="fa-solid fa-dice fa-spin"></i>
+            </div>
+            <div>
+                <h3 id="draw-modal-title" class="text-lg font-black text-slate-800">正在抽順位...</h3>
+                <p id="draw-modal-desc" class="text-xs text-slate-500 mt-1">與全體 6 人即時競爭權威籤池</p>
+            </div>
+            <div id="draw-modal-result" class="hidden text-3xl font-black text-emerald-600 bg-emerald-50 py-3 rounded-2xl border border-emerald-200">
+                第 - 順位
+            </div>
+        </div>
+    </div>
+
+    <!-- FIREBASE MODULE & APPLICATION LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            runTransaction, 
+            onSnapshot 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase Configuration & Variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-draw-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "AIzaSyDummyKeyForFallbackOnly",
+                authDomain: "dummy.firebaseapp.com",
+                projectId: "dummy-project",
+                storageBucket: "dummy.appspot.com",
+                messagingSenderId: "123456789",
+                appId: "1:123456789:web:abcdef"
+            };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // App State
+        let currentUser = null;
+        let currentRoomId = null;
+        let roomUnsubscribe = null;
+        let currentRoomData = null;
+        let isProcessingDraw = false;
+
+        // UI View Containers
+        const viewLobby = document.getElementById('view-lobby');
+        const viewNameInput = document.getElementById('view-name-input');
+        const viewRoomDashboard = document.getElementById('view-room-dashboard');
+
+        // Inputs & Controls
+        const btnCreateRoom = document.getElementById('btn-create-room');
+        const btnJoinByCode = document.getElementById('btn-join-by-code');
+        const inputRoomId = document.getElementById('input-room-id');
+        const inputUserName = document.getElementById('input-user-name');
+        const btnConfirmJoin = document.getElementById('btn-confirm-join');
+        const btnCopyLink = document.getElementById('btn-copy-link');
+        const btnDrawRank = document.getElementById('btn-draw-rank');
+
+        // Text Displays
+        const displayJoiningRoomId = document.getElementById('display-joining-room-id');
+        const roomCodeDisplay = document.getElementById('room-code-display');
+        const roomStatusBadge = document.getElementById('room-status-badge');
+        const drawBtnStatusText = document.getElementById('draw-btn-status-text');
+        const btnDrawLabel = document.getElementById('btn-draw-label');
+        const btnDrawIcon = document.getElementById('btn-draw-icon');
+        const progressCounter = document.getElementById('progress-counter');
+        const participantsCountTag = document.getElementById('participants-count-tag');
+        const ranksTableContainer = document.getElementById('ranks-table-container');
+        const remainingRanksContainer = document.getElementById('remaining-ranks-container');
+        const participantsListContainer = document.getElementById('participants-list-container');
+        const completedSummaryCard = document.getElementById('completed-summary-card');
+
+        // Modal Elements
+        const drawModal = document.getElementById('draw-modal');
+        const drawModalIcon = document.getElementById('draw-modal-icon');
+        const drawModalTitle = document.getElementById('draw-modal-title');
+        const drawModalDesc = document.getElementById('draw-modal-desc');
+        const drawModalResult = document.getElementById('draw-modal-result');
+
+        // 1. Initialize Authentication safely
+        async function initAuth() {
+            return new Promise((resolve, reject) => {
+                const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                
+                const unsubscribe = onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUser = user;
+                        unsubscribe();
+                        resolve(user);
+                    }
+                });
+
+                if (initialToken) {
+                    signInWithCustomToken(auth, initialToken).catch((err) => {
+                        console.warn("Custom token auth failed, falling back to anonymous auth:", err);
+                        signInAnonymously(auth).catch(reject);
+                    });
+                } else {
+                    signInAnonymously(auth).catch(reject);
+                }
+            });
+        }
+
+        // Firestore Document Path strictly following Rule 1
+        function getRoomDocRef(roomId) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId.toUpperCase());
+        }
+
+        // Toast Helper (Replaces illegal alert/confirm)
+        function showToast(msg, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            const toastMessage = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMessage.textContent = msg;
+            if (type === 'error') {
+                toastIcon.className = 'fa-solid fa-circle-exclamation text-red-400 text-lg ml-2';
+            } else if (type === 'success') {
+                toastIcon.className = 'fa-solid fa-circle-check text-emerald-400 text-lg ml-2';
+            } else {
+                toastIcon.className = 'fa-solid fa-circle-info text-blue-400 text-lg ml-2';
+            }
+
+            toastContainer.classList.remove('opacity-0', 'translate-y-[-20px]');
+            toastContainer.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toastContainer.classList.remove('opacity-100', 'translate-y-0');
+                toastContainer.classList.add('opacity-0', 'translate-y-[-20px]');
+            }, 3000);
+        }
+
+        // Helper: Generate Secure Random 8-char Room ID
+        function generateRoomId() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid easily confused chars
+            const array = new Uint8Array(8);
+            crypto.getRandomValues(array);
+            let result = '';
+            for (let i = 0; i < 8; i++) {
+                result += chars[array[i] % chars.length];
+            }
+            return result;
+        }
+
+        // Helper: Format Rank Badge Icon/Style
+        function getRankBadgeHTML(rank) {
+            switch(rank) {
+                case 1:
+                    return `<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-white font-extrabold text-sm shadow-sm">🥇</span>`;
+                case 2:
+                    return `<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-800 font-extrabold text-sm shadow-sm">🥈</span>`;
+                case 3:
+                    return `<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-700 text-white font-extrabold text-sm shadow-sm">🥉</span>`;
+                default:
+                    return `<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200">${rank}</span>`;
+            }
+        }
+
+        // Check URL Query Parameters on Page Load
+        function checkUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            const roomId = params.get('room');
+            if (roomId && roomId.trim().length > 0) {
+                prepareJoinRoom(roomId.trim().toUpperCase());
+            }
+        }
+
+        // Switch Screen Views
+        function showView(viewName) {
+            viewLobby.classList.add('hidden');
+            viewNameInput.classList.add('hidden');
+            viewRoomDashboard.classList.add('hidden');
+
+            if (viewName === 'lobby') viewLobby.classList.remove('hidden');
+            if (viewName === 'name-input') viewNameInput.classList.remove('hidden');
+            if (viewName === 'dashboard') viewRoomDashboard.classList.remove('hidden');
+        }
+
+        // Create Room Logic
+        async function createNewRoom() {
+            if (!currentUser) {
+                showToast("正在初始化連線，請稍後...", "error");
+                return;
+            }
+
+            const newRoomId = generateRoomId();
+            const roomRef = getRoomDocRef(newRoomId);
+
+            const initialRoomData = {
+                roomId: newRoomId,
+                createdAt: Date.now(),
+                gameStatus: 'waiting', // waiting | drawing | completed
+                remainingRanks: [1, 2, 3, 4, 5, 6],
+                participants: [], // [{ id, name, joinedAt }]
+                assignments: {} // { [userId]: { rank, name, drawnAt } }
+            };
+
+            try {
+                await setDoc(roomRef, initialRoomData);
+                // Update URL query string without reloading page
+                const newUrl = window.location.pathname + '?room=' + newRoomId;
+                window.history.pushState({ path: newUrl }, '', newUrl);
+                
+                prepareJoinRoom(newRoomId);
+            } catch (err) {
+                console.error("Error creating room:", err);
+                showToast("建立房間失敗，請再試一次", "error");
+            }
+        }
+
+        // Prepare Join Room (Check room exists & check existing user status)
+        async function prepareJoinRoom(roomId) {
+            currentRoomId = roomId.toUpperCase();
+            displayJoiningRoomId.textContent = currentRoomId;
+
+            try {
+                const roomRef = getRoomDocRef(currentRoomId);
+                const snap = await getDoc(roomRef);
+
+                if (!snap.exists()) {
+                    showToast("找不到此房間代碼，請確認後重試", "error");
+                    showView('lobby');
+                    return;
+                }
+
+                const data = snap.data();
+                const userId = currentUser.uid;
+                
+                // Check if user is already a participant in this room
+                const existingParticipant = data.participants.find(p => p.id === userId);
+                
+                // Check saved user name in browser session
+                const savedName = localStorage.getItem(`draw_app_username_${currentRoomId}`);
+
+                if (existingParticipant || savedName) {
+                    // Re-join automatically
+                    const nameToUse = existingParticipant ? existingParticipant.name : savedName;
+                    await executeJoinRoom(nameToUse);
+                } else {
+                    // Check room limit (Max 6)
+                    if (data.participants.length >= 6) {
+                        showToast("此房間參與人數已滿（最多 6 人）", "error");
+                        showView('lobby');
+                        return;
+                    }
+                    // Ask for name
+                    showView('name-input');
+                }
+
+            } catch (err) {
+                console.error("Error checking room:", err);
+                showToast("讀取房間資料失敗", "error");
+                showView('lobby');
+            }
+        }
+
+        // Execute Room Join (Atomic registration)
+        async function executeJoinRoom(userName) {
+            if (!userName || !userName.trim()) {
+                showToast("請輸入有效暱稱", "error");
+                return;
+            }
+
+            const cleanName = userName.trim().substring(0, 12);
+            const userId = currentUser.uid;
+            const roomRef = getRoomDocRef(currentRoomId);
+
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const roomDoc = await transaction.get(roomRef);
+                    if (!roomDoc.exists()) {
+                        throw new Error("ROOM_NOT_FOUND");
+                    }
+
+                    const roomData = roomDoc.data();
+                    const existingIdx = roomData.participants.findIndex(p => p.id === userId);
+
+                    if (existingIdx === -1) {
+                        if (roomData.participants.length >= 6) {
+                            throw new Error("ROOM_FULL");
+                        }
+                        // Add participant
+                        roomData.participants.push({
+                            id: userId,
+                            name: cleanName,
+                            joinedAt: Date.now()
+                        });
+                        transaction.update(roomRef, { participants: roomData.participants });
+                    } else {
+                        // Update name if changed
+                        roomData.participants[existingIdx].name = cleanName;
+                        transaction.update(roomRef, { participants: roomData.participants });
+                    }
+                });
+
+                // Remember local user name for recovery
+                localStorage.setItem(`draw_app_username_${currentRoomId}`, cleanName);
+
+                // Subscribe to Realtime Updates
+                subscribeToRoomUpdates(currentRoomId);
+
+                // Show Dashboard
+                showView('dashboard');
+
+            } catch (err) {
+                console.error("Join Room Error:", err);
+                if (err.message === "ROOM_FULL") {
+                    showToast("此房間已被其他人額滿（最多 6 人）", "error");
+                    showView('lobby');
+                } else {
+                    showToast("加入房間失敗，請重試", "error");
+                }
+            }
+        }
+
+        // Subscribe to Room Realtime Snapshot
+        function subscribeToRoomUpdates(roomId) {
+            if (roomUnsubscribe) {
+                roomUnsubscribe();
+            }
+
+            const roomRef = getRoomDocRef(roomId);
+
+            roomUnsubscribe = onSnapshot(roomRef, (snapshot) => {
+                if (!snapshot.exists()) {
+                    showToast("房間已被刪除或不存在", "error");
+                    showView('lobby');
+                    return;
+                }
+
+                currentRoomData = snapshot.data();
+                renderRoomDashboard(currentRoomData);
+
+            }, (error) => {
+                console.error("Realtime listener error:", error);
+                showToast("連線中斷，正在嘗試重新同步...", "error");
+            });
+        }
+
+        // Render Dashboard UI from authoritative state
+        function renderRoomDashboard(room) {
+            const userId = currentUser.uid;
+
+            // Room code display
+            roomCodeDisplay.textContent = room.roomId;
+
+            // Participant Counts
+            const participantsCount = room.participants.length;
+            participantsCountTag.textContent = `${participantsCount} / 6 人加入`;
+
+            // Draw Assignments Progress
+            const drawnCount = Object.keys(room.assignments || {}).length;
+            progressCounter.textContent = `${drawnCount} / 6 人完成`;
+
+            // Game Status Badge
+            if (room.remainingRanks.length === 0 || drawnCount === 6) {
+                roomStatusBadge.textContent = "抽籤完成";
+                roomStatusBadge.className = "px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800";
+                completedSummaryCard.classList.remove('hidden');
+            } else {
+                roomStatusBadge.textContent = `${drawnCount}/6 抽籤中`;
+                roomStatusBadge.className = "px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800";
+                completedSummaryCard.classList.add('hidden');
+            }
+
+            // --- 1. RENDER DRAW BUTTON STATE ---
+            const userAssignment = room.assignments ? room.assignments[userId] : null;
+
+            if (userAssignment) {
+                // User already drawn
+                btnDrawRank.disabled = true;
+                btnDrawRank.classList.remove('pulse-button', 'bg-line', 'hover:bg-line-hover');
+                btnDrawRank.classList.add('bg-slate-200', 'text-slate-600');
+                btnDrawLabel.textContent = `✅ 你已抽到第 ${userAssignment.rank} 順位`;
+                btnDrawIcon.className = "fa-solid fa-circle-check text-emerald-600 text-2xl";
+                drawBtnStatusText.textContent = "你已完成抽籤！結果已固定不可更改";
+                drawBtnStatusText.className = "text-xs font-bold text-emerald-600";
+            } else if (room.remainingRanks.length === 0) {
+                // All drawn by others
+                btnDrawRank.disabled = true;
+                btnDrawRank.classList.remove('pulse-button');
+                btnDrawLabel.textContent = "🎉 所有順位已抽出";
+                btnDrawIcon.className = "fa-solid fa-flag-checkered text-2xl";
+                drawBtnStatusText.textContent = "抽籤已結束";
+                drawBtnStatusText.className = "text-xs font-bold text-slate-400";
+            } else {
+                // Available to draw
+                btnDrawRank.disabled = false;
+                btnDrawRank.classList.add('pulse-button', 'bg-line', 'hover:bg-line-hover');
+                btnDrawRank.classList.remove('bg-slate-200', 'text-slate-600');
+                btnDrawLabel.textContent = "🎲 抽我的順位";
+                btnDrawIcon.className = "fa-solid fa-dice text-2xl";
+                drawBtnStatusText.textContent = "搶抽順位中！先到先得";
+                drawBtnStatusText.className = "text-xs font-bold text-amber-600 animate-pulse";
+            }
+
+            // --- 2. RENDER 1~6 RANKS TABLE ---
+            ranksTableContainer.innerHTML = '';
+            
+            // Map assignments by rank for quick lookup
+            const rankToAssignment = {};
+            if (room.assignments) {
+                Object.values(room.assignments).forEach(a => {
+                    rankToAssignment[a.rank] = a;
+                });
+            }
+
+            for (let rank = 1; rank <= 6; rank++) {
+                const assigned = rankToAssignment[rank];
+                const row = document.createElement('div');
+                row.className = "flex items-center justify-between p-3 rounded-xl border transition-all duration-200 " +
+                    (assigned ? "bg-emerald-50/60 border-emerald-200 shadow-sm" : "bg-slate-50 border-slate-200/80");
+
+                const leftPart = `
+                    <div class="flex items-center space-x-3">
+                        ${getRankBadgeHTML(rank)}
+                        <span class="font-bold text-sm ${assigned ? 'text-slate-900' : 'text-slate-400'}">
+                            第 ${rank} 順位
+                        </span>
+                    </div>
+                `;
+
+                const rightPart = assigned ? `
+                    <div class="flex items-center space-x-2">
+                        <span class="font-black text-emerald-800 text-sm bg-emerald-100/80 px-3 py-1 rounded-lg">
+                            ${assigned.name}
+                        </span>
+                        <i class="fa-solid fa-check text-emerald-600 text-xs"></i>
+                    </div>
+                ` : `
+                    <span class="text-xs font-semibold text-slate-400 bg-slate-200/60 px-2.5 py-1 rounded-lg">
+                        尚未抽出
+                    </span>
+                `;
+
+                row.innerHTML = leftPart + rightPart;
+                ranksTableContainer.appendChild(row);
+            }
+
+            // --- 3. RENDER REMAINING RANKS POOL ---
+            remainingRanksContainer.innerHTML = '';
+            if (room.remainingRanks && room.remainingRanks.length > 0) {
+                // Sort ascending for clean display
+                const sortedRemaining = [...room.remainingRanks].sort((a, b) => a - b);
+                sortedRemaining.forEach(num => {
+                    const chip = document.createElement('span');
+                    chip.className = "inline-flex items-center justify-center bg-slate-800 text-white font-black text-xs px-3 py-1.5 rounded-xl shadow-sm border border-slate-700 animate-fade-in";
+                    chip.textContent = `第 ${num} 順位`;
+                    remainingRanksContainer.appendChild(chip);
+                });
+            } else {
+                remainingRanksContainer.innerHTML = `<span class="text-xs text-slate-400 italic">籤池已空（順位已完全分配）</span>`;
+            }
+
+            // --- 4. RENDER PARTICIPANTS LIST ---
+            participantsListContainer.innerHTML = '';
+            room.participants.forEach(p => {
+                const pAssignment = room.assignments ? room.assignments[p.id] : null;
+                const isMe = p.id === userId;
+
+                const pCard = document.createElement('div');
+                pCard.className = "flex items-center justify-between p-2.5 rounded-xl text-xs font-bold border " +
+                    (isMe ? "bg-amber-50/80 border-amber-200" : "bg-white border-slate-100");
+
+                const pNameHTML = `
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-user text-slate-400"></i>
+                        <span class="text-slate-800 ${isMe ? 'font-black text-emerald-700' : ''}">${p.name}</span>
+                        ${isMe ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-extrabold">你</span>' : ''}
+                    </div>
+                `;
+
+                const pStatusHTML = pAssignment ? `
+                    <span class="text-emerald-700 font-extrabold bg-emerald-100 px-2 py-0.5 rounded-md flex items-center space-x-1">
+                        <i class="fa-solid fa-check text-[10px]"></i>
+                        <span>第 ${pAssignment.rank} 順位</span>
+                    </span>
+                ` : `
+                    <span class="text-slate-400 font-medium">尚未抽</span>
+                `;
+
+                pCard.innerHTML = pNameHTML + pStatusHTML;
+                participantsListContainer.appendChild(pCard);
+            });
+        }
+
+        // Perform Atomic Secure Draw Operation
+        async function handleDrawClick() {
+            if (isProcessingDraw || !currentRoomData || !currentUser) return;
+
+            const userId = currentUser.uid;
+            const roomRef = getRoomDocRef(currentRoomId);
+
+            // Show Draw Modal
+            drawModal.classList.remove('hidden');
+            drawModalIcon.className = "fa-solid fa-dice fa-spin";
+            drawModalTitle.textContent = "正在抽順位...";
+            drawModalDesc.textContent = "全體即時競爭權威籤池";
+            drawModalResult.classList.add('hidden');
+
+            isProcessingDraw = true;
+
+            try {
+                let drawnRank = null;
+
+                // Execute Atomic Firestore Transaction
+                await runTransaction(db, async (transaction) => {
+                    const roomDoc = await transaction.get(roomRef);
+                    if (!roomDoc.exists()) {
+                        throw new Error("ROOM_NOT_FOUND");
+                    }
+
+                    const room = roomDoc.data();
+                    const assignments = room.assignments || {};
+                    const remainingRanks = room.remainingRanks || [];
+                    const participants = room.participants || [];
+
+                    // Safeguard 1: Verify user is a valid participant
+                    const userParticipant = participants.find(p => p.id === userId);
+                    if (!userParticipant) {
+                        throw new Error("NOT_A_PARTICIPANT");
+                    }
+
+                    // Safeguard 2: Verify user hasn't already drawn
+                    if (assignments[userId]) {
+                        throw new Error("ALREADY_DRAWN");
+                    }
+
+                    // Safeguard 3: Verify pool is not empty
+                    if (remainingRanks.length === 0) {
+                        throw new Error("POOL_EMPTY");
+                    }
+
+                    // Cryptographically secure random pick from remaining pool
+                    const randBuffer = new Uint32Array(1);
+                    crypto.getRandomValues(randBuffer);
+                    const randIndex = Math.floor((randBuffer[0] / (0xFFFFFFFF + 1)) * remainingRanks.length);
+                    
+                    drawnRank = remainingRanks[randIndex];
+
+                    // Remove rank from remaining pool
+                    remainingRanks.splice(randIndex, 1);
+
+                    // Update assignments
+                    assignments[userId] = {
+                        rank: drawnRank,
+                        name: userParticipant.name,
+                        drawnAt: Date.now()
+                    };
+
+                    // Check game completion status
+                    const newStatus = remainingRanks.length === 0 ? 'completed' : 'drawing';
+
+                    // Commit transaction
+                    transaction.update(roomRef, {
+                        remainingRanks: remainingRanks,
+                        assignments: assignments,
+                        gameStatus: newStatus
+                    });
+                });
+
+                // Display dramatic result reveal in modal
+                setTimeout(() => {
+                    drawModalIcon.className = "fa-solid fa-trophy text-amber-500 animate-bounce";
+                    drawModalTitle.textContent = "🎉 抽籤成功！";
+                    drawModalDesc.textContent = "此順位已即時同步傳至所有人的手機";
+                    drawModalResult.textContent = `第 ${drawnRank} 順位`;
+                    drawModalResult.classList.remove('hidden');
+
+                    setTimeout(() => {
+                        drawModal.classList.add('hidden');
+                        isProcessingDraw = false;
+                    }, 1800);
+                }, 800);
+
+            } catch (err) {
+                console.error("Draw transaction failed:", err);
+                drawModal.classList.add('hidden');
+                isProcessingDraw = false;
+
+                if (err.message === "ALREADY_DRAWN") {
+                    showToast("你已經抽過順位囉！不可重複抽籤", "error");
+                } else if (err.message === "POOL_EMPTY") {
+                    showToast("所有順位已被其他人抽完！", "error");
+                } else if (err.message === "NOT_A_PARTICIPANT") {
+                    showToast("請先加入房間才能參與抽籤", "error");
+                } else {
+                    showToast("抽籤搶位衝突或連線問題，請再試一次", "error");
+                }
+            }
+        }
+
+        // Copy Shareable Link to Clipboard
+        function copyRoomLink() {
+            if (!currentRoomId) return;
+            const shareUrl = `${window.location.origin}${window.location.pathname}?room=${currentRoomId}`;
+            
+            // Standard fallback copy method for embedded iframe security
+            const dummyInput = document.createElement('input');
+            document.body.appendChild(dummyInput);
+            dummyInput.value = shareUrl;
+            dummyInput.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast("已複製連結！快貼到 LINE 群組邀請朋友", "success");
+                } else {
+                    showToast(`請手動複製連結：${shareUrl}`);
+                }
+            } catch (err) {
+                showToast(`請手動複製連結：${shareUrl}`);
+            } finally {
+                document.body.removeChild(dummyInput);
+            }
+        }
+
+        // Bind DOM Button Events
+        btnCreateRoom.addEventListener('click', createNewRoom);
+
+        btnJoinByCode.addEventListener('click', () => {
+            const code = inputRoomId.value.trim().toUpperCase();
+            if (code.length < 4) {
+                showToast("請輸入正確的房間代碼", "error");
+                return;
+            }
+            prepareJoinRoom(code);
+        });
+
+        btnConfirmJoin.addEventListener('click', () => {
+            const name = inputUserName.value.trim();
+            executeJoinRoom(name);
+        });
+
+        btnCopyLink.addEventListener('click', copyRoomLink);
+
+        btnDrawRank.addEventListener('click', handleDrawClick);
+
+        // Initialize App on Window Load
+        window.addEventListener('load', async () => {
+            try {
+                await initAuth();
+                checkUrlParams();
+            } catch (err) {
+                console.error("Initialization Error:", err);
+                showToast("網路連線失敗，請重新整理頁面", "error");
+            }
+        });
+    </script>
+</body>
+</html>
